@@ -8,7 +8,7 @@ pool:
   vmImage: 'ubuntu-latest'
  
 variables:
-  ImageName: 'micro/currencyService:$(Build.BuildId)'
+  ImageName: '172054/currencyService:$(Build.BuildId)'
  
 stages:
 - stage: Build
