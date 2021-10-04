@@ -2,13 +2,13 @@ name : Docker-CI
 trigger:
   branches:
     include:
-      - master
+      - main
  
 pool:
   vmImage: 'ubuntu-latest'
  
 variables:
-  ImageName: '172054/currencyService:$(Build.BuildId)'
+  ImageName: '172054/currencyservice:$(Build.BuildId)'
  
 stages:
 - stage: Build
@@ -37,3 +37,85 @@ stages:
         command: 'Push an image'
         imageName: '$(ImageName)'
       condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
+
+- stage: Deploy
+  displayName: Deploy
+  jobs:  
+  - job: Deploy
+    displayName: Deploy to kubernetes
+    steps:
+    - task: KubectlInstaller@0
+      displayName: 'Build the Docker image'
+      inputs:
+        kubectlVersion: 'latest'    
+    
+     
+    - task: Kubernetes@1
+      inputs:
+        connectionType: 'Kubernetes Service Connection'
+        kubernetesServiceEndpoint: 'dagile-lohith-name'
+        namespace: 'lohith-name'
+        command: 'apply'
+        useConfigurationFile: true
+        configurationType: 'inline'
+        inline: |
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: currencyservice
+          spec:
+            selector:
+              matchLabels:
+                app: currencyservice
+            template:
+              metadata:
+                labels:
+                  app: currencyservice
+              spec:
+                serviceAccountName: default
+                terminationGracePeriodSeconds: 5
+                containers:
+                - name: server
+                  image: currencyservice
+                  ports:
+                  - name: grpc
+                    containerPort: 7000
+                  env:
+                  - name: PORT
+                    value: "7000"
+                  # - name: DISABLE_TRACING
+                  #   value: "1"
+                  # - name: DISABLE_PROFILER
+                  #   value: "1"
+                  # - name: DISABLE_DEBUGGER
+                  #   value: "1"
+                  readinessProbe:
+                    exec:
+                      command: ["/bin/grpc_health_probe", "-addr=:7000"]
+                  livenessProbe:
+                    exec:
+                      command: ["/bin/grpc_health_probe", "-addr=:7000"]
+                  resources:
+                    requests:
+                      cpu: 100m
+                      memory: 64Mi
+                    limits:
+                      cpu: 200m
+                      memory: 128Mi
+          ---
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: currencyservice
+          spec:
+            type: ClusterIP
+            selector:
+              app: currencyservice
+            ports:
+            - name: grpc
+              port: 7000
+              targetPort: 7000
+        secretType: 'dockerRegistry'
+        containerRegistryType: 'Azure Container Registry'
+        azureSubscriptionEndpointForSecrets: 'DAgility (44e26024-4977-4419-8d23-0e1e22e8804e)'
+        azureContainerRegistry: 'dagile.azurecr.io'
